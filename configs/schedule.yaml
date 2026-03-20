@@ -1,0 +1,34 @@
+timezone: America/Sao_Paulo
+jobs:
+  - name: reuters_daily
+    spider: reuters_fact_check
+    cron: "0 7 * * *"
+    enabled: false
+  - name: estadao_daily
+    spider: estadao_verifica
+    cron: "10 7 * * *"
+    enabled: false
+  - name: g1_daily
+    spider: g1_fato_ou_fake
+    cron: "20 7 * * *"
+    enabled: false
+  - name: aosfatos_daily
+    spider: aos_fatos
+    cron: "30 7 * * *"
+    enabled: false
+  - name: lupa_daily
+    spider: agencia_lupa
+    cron: "40 7 * * *"
+    enabled: false
+  - name: afp_daily
+    spider: afp_checamos
+    cron: "50 7 * * *"
+    enabled: false
+  - name: uol_daily
+    spider: uol_confere
+    cron: "0 8 * * *"
+    enabled: false
+  - name: comprova_daily
+    spider: projeto_comprova
+    cron: "10 8 * * *"
+    enabled: false

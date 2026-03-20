@@ -1,0 +1,59 @@
+[build-system]
+requires = ["hatchling>=1.24.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "factcheck-scrape"
+version = "0.1.0"
+description = "Pipeline de webscraping para sites de fact-checking"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [
+  { name = "FactCheck Scrape" }
+]
+dependencies = [
+  "apscheduler>=3.10.4",
+  "pyyaml>=6.0.1",
+  "scrapy>=2.11.2",
+  "structlog>=24.1.0",
+]
+
+[project.optional-dependencies]
+analysis = [
+  "pandas>=2.2",
+  "numpy>=2.0",
+  "matplotlib>=3.9",
+  "seaborn>=0.13",
+  "jupyterlab>=4.2",
+  "ipykernel>=6.29",
+  "spacy>=3.7,<4",
+  "tqdm>=4.66",
+]
+scrapling = [
+  "scrapling[fetchers]>=0.4.2",
+]
+dev = [
+  "pytest>=8.2.0",
+  "ruff>=0.5.0",
+]
+
+[project.scripts]
+factcheck-scrape = "factcheck_scrape.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/factcheck_scrape"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+
+[tool.ruff.lint.per-file-ignores]
+"*.ipynb" = ["E402"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

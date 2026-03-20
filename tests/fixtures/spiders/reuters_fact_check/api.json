@@ -1,0 +1,17 @@
+{
+  "result": {
+    "content_elements": [
+      {
+        "canonical_url": "/fact-check/portugues/exemplo-reuters/",
+        "headlines": {"basic": "Exemplo Reuters 1"}
+      },
+      {
+        "canonical_url": "/fact-check/portugues/exemplo-reuters-2/",
+        "headlines": {"basic": "Exemplo Reuters 2"}
+      }
+    ],
+    "pagination": {
+      "next_offset": 20
+    }
+  }
+}
