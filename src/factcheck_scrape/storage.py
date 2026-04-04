@@ -33,11 +33,22 @@ class RunWriter:
         self.items_path = self.run_dir / "items.jsonl"
         self.run_path = self.run_dir / "run.json"
         self.started_at = utc_now_iso()
+        self._items_handle = None
+
+    def _get_items_handle(self):
+        if self._items_handle is None or self._items_handle.closed:
+            self._items_handle = self.items_path.open("a", encoding="utf-8")
+        return self._items_handle
 
     def write_item(self, item: Dict[str, Any]) -> None:
-        with self.items_path.open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps(item, ensure_ascii=True))
-            handle.write("\n")
+        handle = self._get_items_handle()
+        handle.write(json.dumps(item, ensure_ascii=False))
+        handle.write("\n")
+        handle.flush()
+
+    def close(self) -> None:
+        if self._items_handle and not self._items_handle.closed:
+            self._items_handle.close()
 
     def update_run(
         self,
@@ -88,7 +99,7 @@ class RunWriter:
         payload["totals"] = totals
 
         with self.run_path.open("w", encoding="utf-8") as handle:
-            json.dump(payload, handle, ensure_ascii=True, indent=2)
+            json.dump(payload, handle, ensure_ascii=False, indent=2)
 
     def _load_run(self) -> Dict[str, Any]:
         if not self.run_path.exists():

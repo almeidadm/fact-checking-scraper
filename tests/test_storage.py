@@ -6,6 +6,7 @@ from factcheck_scrape.storage import RunCounts, RunWriter
 def test_run_writer(tmp_path):
     writer = RunWriter(tmp_path, "run-1")
     writer.write_item({"foo": "bar"})
+    writer.close()
 
     counts = RunCounts(items_seen=1, items_stored=1, items_deduped=0, items_invalid=0)
     writer.update_run(

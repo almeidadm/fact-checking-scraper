@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 from .base import BaseFactCheckSpider
 
 MONTHS = {
@@ -65,6 +67,8 @@ class PoligrafoSpider(BaseFactCheckSpider):
         verdict = self.first_text(response.css(verdict_selector).get())
         rating = verdict
         claim = title
+        author = self.meta_first(response, "meta[name='author']::attr(content)")
+        body = self.extract_body(response)
         language = self.extract_language(response)
         topics = self.unique_list(response.css(".custom-post-categories::text").getall())
         source_type = "fact_check"
@@ -86,6 +90,8 @@ class PoligrafoSpider(BaseFactCheckSpider):
             summary=summary,
             verdict=verdict,
             rating=rating,
+            author=author,
+            body=body,
             language=language,
             country="PT",
             topics=topics,
@@ -120,13 +126,18 @@ class PoligrafoSpider(BaseFactCheckSpider):
         cleaned = self.clean_text(raw)
         if not cleaned:
             return None
-        pieces = cleaned.replace(" às ", " ").split()
-        if len(pieces) < 6:
+        match = re.match(
+            r"(\d{1,2})\s+de\s+(\w+)\s+de\s+(\d{4})"
+            r"(?:\s+[àa]s?\s+(\d{1,2}:\d{2}))?",
+            cleaned,
+            re.IGNORECASE,
+        )
+        if not match:
             return cleaned
-        day = pieces[0].zfill(2)
-        month = MONTHS.get(pieces[2].lower())
-        year = pieces[4]
-        time = pieces[5]
+        day = match.group(1).zfill(2)
+        month = MONTHS.get(match.group(2).lower())
+        year = match.group(3)
+        time_str = match.group(4) or "00:00"
         if not month:
             return cleaned
-        return f"{year}-{month}-{day}T{time}:00"
+        return f"{year}-{month}-{day}T{time_str}:00"

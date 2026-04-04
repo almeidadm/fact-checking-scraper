@@ -10,7 +10,7 @@ class EFarsasSpider(BaseFactCheckSpider):
     agency_id = "e_farsas"
     agency_name = "E-farsas"
     allowed_domains = ["e-farsas.com", "www.e-farsas.com"]
-    start_urls = ["http://www.e-farsas.com/"]
+    start_urls = ["https://www.e-farsas.com/"]
 
     def parse(self, response):
         for href in self._extract_article_links(response):
@@ -60,6 +60,8 @@ class EFarsasSpider(BaseFactCheckSpider):
         rating = verdict
         topics = [topic for topic in topics if topic not in VERDICT_TERMS]
         claim = title
+        author = self.extract_author(response, article)
+        body = self.extract_body(response, article)
         language = self.extract_language(response, article)
         source_type = self.extract_source_type(article)
 
@@ -80,6 +82,8 @@ class EFarsasSpider(BaseFactCheckSpider):
             summary=summary,
             verdict=verdict,
             rating=rating,
+            author=author,
+            body=body,
             language=language,
             country="BR",
             topics=topics,

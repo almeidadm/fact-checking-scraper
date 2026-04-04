@@ -207,7 +207,7 @@ ARTICLE_CASES = [
             "source_url": "https://poligrafo.sapo.pt/fact-check/esta-tabela-com-valores-de-salarios-minimos-em-varios-paises-europeus-esta-correta/",
             "canonical_url": "https://poligrafo.sapo.pt/fact-check/esta-tabela-com-valores-de-salarios-minimos-em-varios-paises-europeus-esta-correta",
             "title": "Esta tabela com valores de salarios minimos em varios paises europeus esta correta?",
-            "published_at": "2026-03-11Tas:00",
+            "published_at": "2026-03-11T15:00:00",
             "claim": "Esta tabela com valores de salarios minimos em varios paises europeus esta correta?",
             "summary": "Os numeros indicados tem fundamento? O Poligrafo verifica.",
             "verdict": "Impreciso",

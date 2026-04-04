@@ -3,7 +3,6 @@ from __future__ import annotations
 import re
 from typing import Iterable
 
-from ..utils import canonicalize_url
 from .base import BaseFactCheckSpider
 
 SITEMAP_INDEX = "https://g1.globo.com/sitemap/g1/sitemap.xml"
@@ -44,17 +43,36 @@ class G1FatoOuFakeSpider(BaseFactCheckSpider):
                 yield response.follow(loc, callback=self.parse_article)
 
     def parse_article(self, response):
-        title = self._extract_title(response)
-        published_at = self._extract_published_at(response)
-        canonical_url = self._extract_canonical_url(response)
-        summary = self._extract_summary(response)
+        jsonld_items = self.extract_jsonld(response)
+        article = self.pick_jsonld(jsonld_items, "NewsArticle", "Article", "WebPage")
+
+        title = self.first_text(
+            article.get("headline"),
+            article.get("name"),
+            self._meta_title(response),
+        )
+        published_at = self.first_text(
+            article.get("datePublished"),
+            self._meta_published_at(response),
+            article.get("dateModified"),
+        )
+        canonical_url = self.extract_canonical_url(response, article)
+        summary = self.first_text(
+            article.get("description"),
+            self._meta_summary(response),
+        )
         verdict = self._extract_verdict(response, title)
         rating = verdict
         claim = self._extract_claim(title, verdict)
-        language = response.css("html::attr(lang)").get() or None
-        topics = self._extract_topics(response)
-        tags = self._extract_tags(response)
-        source_type = self._extract_source_type(response)
+        author = self.extract_author(response, article)
+        body = self.extract_body(response, article)
+        language = self.extract_language(response, article)
+        topics, tags, entities = self.extract_taxonomy(article)
+        topics = topics or self._extract_topics(response)
+        tags = tags or self._extract_tags(response)
+        source_type = self.extract_source_type(article) or self._extract_source_type_microdata(
+            response
+        )
 
         if not self.validate_extracted_article(
             response,
@@ -73,51 +91,42 @@ class G1FatoOuFakeSpider(BaseFactCheckSpider):
             summary=summary,
             verdict=verdict,
             rating=rating,
+            author=author,
+            body=body,
             language=language,
             country="BR",
             topics=topics,
             tags=tags,
-            entities=[],
+            entities=entities,
             source_type=source_type,
         )
 
     def _extract_urlset(self, response) -> Iterable[str]:
         return response.xpath("//*[local-name()='url']/*[local-name()='loc']/text()").getall()
 
-    def _extract_title(self, response) -> str:
+    def _meta_title(self, response) -> str | None:
         return (
             response.css("h1.content-head__title::text").get()
             or response.css("meta[property='og:title']::attr(content)").get()
             or response.css("title::text").get()
-            or ""
-        ).strip()
+        )
 
-    def _extract_published_at(self, response) -> str:
+    def _meta_published_at(self, response) -> str | None:
         return (
             response.css("meta[itemprop='datePublished']::attr(content)").get()
             or response.css("time[itemprop='datePublished']::attr(datetime)").get()
             or response.css("meta[property='article:published_time']::attr(content)").get()
-            or ""
-        ).strip()
-
-    def _extract_canonical_url(self, response) -> str:
-        url = (
-            response.css("link[rel='canonical']::attr(href)").get()
-            or response.css("meta[property='og:url']::attr(content)").get()
-            or response.url
         )
-        return canonicalize_url(url)
 
-    def _extract_summary(self, response) -> str | None:
-        summary = (
+    def _meta_summary(self, response) -> str | None:
+        return (
             response.css("h2.content-head__subtitle::text").get()
             or response.css("meta[itemprop='alternateName']::attr(content)").get()
             or response.css("meta[name='description']::attr(content)").get()
             or response.css("meta[property='og:description']::attr(content)").get()
         )
-        return summary.strip() if summary else None
 
-    def _extract_verdict(self, response, title: str) -> str | None:
+    def _extract_verdict(self, response, title: str | None) -> str | None:
         candidates = []
         if title:
             candidates.append(title)
@@ -131,7 +140,7 @@ class G1FatoOuFakeSpider(BaseFactCheckSpider):
                 return match.group(1).upper()
         return None
 
-    def _extract_claim(self, title: str, verdict: str | None) -> str | None:
+    def _extract_claim(self, title: str | None, verdict: str | None) -> str | None:
         if not title:
             return None
         cleaned = title.strip()
@@ -155,7 +164,7 @@ class G1FatoOuFakeSpider(BaseFactCheckSpider):
             return []
         return [part.strip() for part in keywords.split(",") if part.strip()]
 
-    def _extract_source_type(self, response) -> str | None:
+    def _extract_source_type_microdata(self, response) -> str | None:
         itemtype = response.css("main[itemtype]::attr(itemtype)").get()
         if not itemtype:
             return None

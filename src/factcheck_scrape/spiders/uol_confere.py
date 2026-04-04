@@ -205,6 +205,8 @@ class UolConfereSpider(BaseFactCheckSpider):
         verdict, rating = self.extract_verdict_and_rating(claim_review)
         verdict = verdict or self.infer_verdict(title, summary)
         rating = rating or verdict
+        author = self.extract_author(response, claim_review, news)
+        body = self.extract_body(response, claim_review, news)
         language = self.extract_language(response, claim_review, news)
         topics, tags, entities = self._extract_taxonomy(response, claim_review, news)
         source_type = self.extract_source_type(claim_review, news)
@@ -226,6 +228,8 @@ class UolConfereSpider(BaseFactCheckSpider):
             summary=summary,
             verdict=verdict,
             rating=rating,
+            author=author,
+            body=body,
             language=language,
             country="BR",
             topics=topics,

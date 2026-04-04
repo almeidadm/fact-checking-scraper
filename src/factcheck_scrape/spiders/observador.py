@@ -149,6 +149,8 @@ class ObservadorSpider(BaseFactCheckSpider):
         verdict, rating = self.extract_verdict_and_rating(claim_review)
         verdict = self.infer_verdict(verdict, title, summary) or verdict
         rating = rating or verdict
+        author = self.extract_author(response, claim_review, article)
+        body = self.extract_body(response, claim_review, article)
         language = self.extract_language(response, claim_review, article)
         topics, tags, entities = self.extract_taxonomy(claim_review, article)
         source_type = self.extract_source_type(claim_review, article)
@@ -170,6 +172,8 @@ class ObservadorSpider(BaseFactCheckSpider):
             summary=summary,
             verdict=verdict,
             rating=rating,
+            author=author,
+            body=body,
             language=language,
             country="PT",
             topics=topics,

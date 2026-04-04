@@ -21,6 +21,8 @@ def _valid_item(**overrides) -> dict:
         "summary": None,
         "verdict": None,
         "rating": None,
+        "author": None,
+        "body": None,
         "language": "pt-BR",
         "country": "BR",
         "topics": [],
