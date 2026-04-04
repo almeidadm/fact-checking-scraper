@@ -66,6 +66,8 @@ class BoatosOrgSpider(BaseFactCheckSpider):
         verdict = self.infer_verdict(title, summary)
         rating = verdict
         claim = self._extract_claim(title, summary)
+        author = self.extract_author(response, article)
+        body = self.extract_body(response, article)
         language = self.extract_language(response, article)
         topics, tags, entities = self.extract_taxonomy(article)
         source_type = self.extract_source_type(article)
@@ -87,6 +89,8 @@ class BoatosOrgSpider(BaseFactCheckSpider):
             summary=summary,
             verdict=verdict,
             rating=rating,
+            author=author,
+            body=body,
             language=language,
             country="BR",
             topics=topics,

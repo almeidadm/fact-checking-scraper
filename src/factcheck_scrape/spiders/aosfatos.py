@@ -54,6 +54,8 @@ class AosFatosSpider(BaseFactCheckSpider):
         verdict, rating = self.extract_verdict_and_rating(claim_review)
         verdict = self.infer_verdict(verdict, title, summary) or verdict
         rating = rating or verdict
+        author = self.extract_author(response, article, claim_review)
+        body = self.extract_body(response, article, claim_review)
         language = self.extract_language(response, article, claim_review)
         topics, tags, entities = self.extract_taxonomy(article, claim_review)
         keyword_content = response.css("meta[name='keywords']::attr(content)").get()
@@ -77,6 +79,8 @@ class AosFatosSpider(BaseFactCheckSpider):
             summary=summary,
             verdict=verdict,
             rating=rating,
+            author=author,
+            body=body,
             language=language,
             country="BR",
             topics=topics,

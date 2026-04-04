@@ -67,6 +67,8 @@ class AgenciaLupaSpider(BaseFactCheckSpider):
         claim = self.first_text(
             claim_review.get("claimReviewed"), article.get("claimReviewed"), title, summary
         )
+        author = self.extract_author(response, claim_review, article)
+        body = self.extract_body(response, claim_review, article)
         language = self.extract_language(response, claim_review, article)
         topics, tags, entities = self.extract_taxonomy(claim_review, article)
         keyword_content = response.css("meta[name='keywords']::attr(content)").get()
@@ -90,6 +92,8 @@ class AgenciaLupaSpider(BaseFactCheckSpider):
             summary=summary,
             verdict=verdict,
             rating=rating,
+            author=author,
+            body=body,
             language=language,
             country="BR",
             topics=topics,

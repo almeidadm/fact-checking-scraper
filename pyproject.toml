@@ -14,6 +14,7 @@ authors = [
 ]
 dependencies = [
   "apscheduler>=3.10.4",
+  "jsonschema>=4.20.0",
   "pyyaml>=6.0.1",
   "scrapy>=2.11.2",
   "structlog>=24.1.0",
@@ -57,3 +58,6 @@ select = ["E", "F", "I"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+markers = [
+    "smoke: smoke tests that make real HTTP requests (deselect with '-m \"not smoke\"')",
+]

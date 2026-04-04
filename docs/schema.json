@@ -3,38 +3,122 @@
   "title": "FactCheckItem",
   "type": "object",
   "required": [
-    "item_id",
     "agency_id",
     "agency_name",
-    "spider",
-    "source_url",
     "canonical_url",
-    "title",
-    "published_at",
     "collected_at",
-    "run_id"
+    "item_id",
+    "published_at",
+    "run_id",
+    "source_url",
+    "spider",
+    "title"
   ],
   "properties": {
-    "item_id": { "type": "string" },
-    "agency_id": { "type": "string" },
-    "agency_name": { "type": "string" },
-    "spider": { "type": "string" },
-    "source_url": { "type": "string", "format": "uri" },
-    "canonical_url": { "type": "string", "format": "uri" },
-    "title": { "type": "string" },
-    "published_at": { "type": "string" },
-    "collected_at": { "type": "string" },
-    "run_id": { "type": "string" },
-    "claim": { "type": ["string", "null"] },
-    "summary": { "type": ["string", "null"] },
-    "verdict": { "type": ["string", "null"] },
-    "rating": { "type": ["string", "null"] },
-    "language": { "type": ["string", "null"] },
-    "country": { "type": ["string", "null"] },
-    "topics": { "type": "array", "items": { "type": "string" } },
-    "tags": { "type": "array", "items": { "type": "string" } },
-    "entities": { "type": "array", "items": { "type": "string" } },
-    "source_type": { "type": ["string", "null"] }
+    "item_id": {
+      "type": "string"
+    },
+    "agency_id": {
+      "type": "string"
+    },
+    "agency_name": {
+      "type": "string"
+    },
+    "spider": {
+      "type": "string"
+    },
+    "source_url": {
+      "type": "string",
+      "format": "uri"
+    },
+    "canonical_url": {
+      "type": "string",
+      "format": "uri"
+    },
+    "title": {
+      "type": "string"
+    },
+    "published_at": {
+      "type": "string"
+    },
+    "collected_at": {
+      "type": "string"
+    },
+    "run_id": {
+      "type": "string"
+    },
+    "claim": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "summary": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "verdict": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "rating": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "author": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "body": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "language": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "country": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "topics": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "entities": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "source_type": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
   },
   "additionalProperties": false
 }

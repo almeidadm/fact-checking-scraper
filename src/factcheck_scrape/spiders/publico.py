@@ -68,6 +68,8 @@ class PublicoSpider(BaseFactCheckSpider):
         verdict = self.infer_verdict(title, *keywords)
         rating = verdict
         claim = self._extract_claim(title)
+        author = self.extract_author(response, article)
+        body = self.extract_body(response, article)
         language = self.extract_language(response, article)
         topics, tags, entities = self.extract_taxonomy(article)
         news_keyword_content = response.css("meta[name='news_keywords']::attr(content)").get()
@@ -91,6 +93,8 @@ class PublicoSpider(BaseFactCheckSpider):
             summary=summary,
             verdict=verdict,
             rating=rating,
+            author=author,
+            body=body,
             language=language,
             country="PT",
             topics=topics,

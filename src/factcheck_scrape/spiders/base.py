@@ -1,16 +1,15 @@
 from __future__ import annotations
 
-import json
-import re
 from typing import Any, Dict, Iterable, Optional
-from urllib.parse import urljoin, urlsplit
 
 import scrapy
 
 from ..logging import get_logger
-from ..utils import canonicalize_url, ensure_list, make_item_id, utc_now_iso
-
-PLACEHOLDER_PUBLISHED_AT_VALUES = frozenset({"-", "–", "—"})
+from ..utils import canonicalize_url, make_item_id, utc_now_iso
+from .helpers import claimreview as _cr
+from .helpers import jsonld as _jl
+from .helpers import taxonomy as _tx
+from .helpers import text as _txt
 
 
 class BaseFactCheckSpider(scrapy.Spider):
@@ -23,44 +22,45 @@ class BaseFactCheckSpider(scrapy.Spider):
         super().__init__(*args, **kwargs)
         self.logger_struct = get_logger(self.name)
 
+    # -- text helpers (delegate to helpers.text) --
+
     def canonicalize(self, url: str) -> str:
         return canonicalize_url(url)
 
     def clean_text(self, value: Any) -> str | None:
-        if value is None:
-            return None
-        text = str(value).strip()
-        if not text:
-            return None
-        return " ".join(text.split())
+        return _txt.clean_text(value)
 
     def first_text(self, *values: Any) -> str | None:
-        for value in values:
-            if value is None:
-                continue
-            if isinstance(value, (list, tuple)):
-                for item in value:
-                    cleaned = self.clean_text(item)
-                    if cleaned:
-                        return cleaned
-                continue
-            cleaned = self.clean_text(value)
-            if cleaned:
-                return cleaned
-        return None
+        return _txt.first_text(*values)
 
     def is_probable_url(self, value: Any) -> bool:
-        cleaned = self.clean_text(value)
-        if not cleaned:
-            return False
-        parsed = urlsplit(cleaned)
-        return parsed.scheme in {"http", "https"} and bool(parsed.netloc)
+        return _txt.is_probable_url(value)
 
     def is_placeholder_published_at(self, value: Any) -> bool:
-        cleaned = self.clean_text(value)
-        if not cleaned:
-            return False
-        return cleaned in PLACEHOLDER_PUBLISHED_AT_VALUES
+        return _txt.is_placeholder_published_at(value)
+
+    def listify(self, value: Any) -> list[Any]:
+        return _txt.listify(value)
+
+    def split_keywords(self, value: Any) -> list[str]:
+        return _txt.split_keywords(value)
+
+    def extract_names(self, value: Any) -> list[str]:
+        return _txt.extract_names(value)
+
+    def unique_list(self, values: Iterable[str]) -> list[str]:
+        return _txt.unique_list(values)
+
+    def extract_label_prefix_before_colon(self, value: Any) -> str | None:
+        return _txt.extract_label_prefix_before_colon(value)
+
+    def extract_text_after_colon(self, value: Any) -> str | None:
+        return _txt.extract_text_after_colon(value)
+
+    def meta_first(self, response, *selectors: str) -> str | None:
+        return _txt.meta_first(response, *selectors)
+
+    # -- validation --
 
     def validate_extracted_article(
         self,
@@ -105,231 +105,48 @@ class BaseFactCheckSpider(scrapy.Spider):
 
         return True
 
+    # -- JSON-LD (delegate to helpers.jsonld) --
+
     def extract_jsonld(self, response) -> list[dict[str, Any]]:
-        items: list[dict[str, Any]] = []
-        scripts = response.css("script[type='application/ld+json']::text").getall()
-        for raw in scripts:
-            raw = raw.strip()
-            if not raw:
-                continue
-            try:
-                payload = json.loads(raw)
-            except json.JSONDecodeError:
-                self.logger_struct.debug("jsonld_parse_error", url=response.url)
-                continue
-            items.extend(self._normalize_jsonld(payload))
-        return items
-
-    def _normalize_jsonld(self, payload: Any) -> list[dict[str, Any]]:
-        normalized: list[dict[str, Any]] = []
-        if isinstance(payload, list):
-            for item in payload:
-                normalized.extend(self._normalize_jsonld(item))
-            return normalized
-        if not isinstance(payload, dict):
-            return normalized
-
-        graph = payload.get("@graph")
-        if isinstance(graph, list):
-            for item in graph:
-                normalized.extend(self._normalize_jsonld(item))
-            return normalized
-
-        normalized.append(payload)
-        return normalized
+        return _jl.extract_jsonld(response, logger=self.logger_struct)
 
     def jsonld_type_matches(self, item: dict[str, Any], expected: str) -> bool:
-        item_type = item.get("@type")
-        if isinstance(item_type, list):
-            return expected in item_type
-        return item_type == expected
+        return _jl.jsonld_type_matches(item, expected)
 
     def pick_jsonld(self, items: Iterable[dict[str, Any]], *expected_types: str) -> dict[str, Any]:
-        collected = list(items)
-        for expected in expected_types:
-            for item in collected:
-                if self.jsonld_type_matches(item, expected):
-                    return item
-        return collected[0] if collected else {}
+        return _jl.pick_jsonld(items, *expected_types)
 
-    def meta_first(self, response, *selectors: str) -> str | None:
-        for selector in selectors:
-            value = response.css(selector).get()
-            cleaned = self.clean_text(value)
-            if cleaned:
-                return cleaned
-        return None
-
-    def listify(self, value: Any) -> list[Any]:
-        if value is None:
-            return []
-        if isinstance(value, list):
-            return value
-        return [value]
-
-    def split_keywords(self, value: Any) -> list[str]:
-        parts: list[str] = []
-        for item in ensure_list(value):
-            if item is None:
-                continue
-            for part in str(item).split(","):
-                cleaned = self.clean_text(part)
-                if cleaned:
-                    parts.append(cleaned)
-        return self.unique_list(parts)
-
-    def extract_names(self, value: Any) -> list[str]:
-        names: list[str] = []
-        for item in self.listify(value):
-            if isinstance(item, dict):
-                name = self.first_text(item.get("name"), item.get("headline"))
-                if name:
-                    names.append(name)
-                continue
-            cleaned = self.clean_text(item)
-            if cleaned:
-                names.append(cleaned)
-        return self.unique_list(names)
-
-    def unique_list(self, values: Iterable[str]) -> list[str]:
-        seen: set[str] = set()
-        unique: list[str] = []
-        for value in values:
-            cleaned = self.clean_text(value)
-            if not cleaned:
-                continue
-            if cleaned in seen:
-                continue
-            seen.add(cleaned)
-            unique.append(cleaned)
-        return unique
-
-    def extract_taxonomy(self, *items: dict[str, Any]) -> tuple[list[str], list[str], list[str]]:
-        topics: list[str] = []
-        tags: list[str] = []
-        entities: list[str] = []
-
-        for item in items:
-            if not isinstance(item, dict):
-                continue
-            topics.extend(self.extract_names(item.get("articleSection")))
-            topics.extend(self.extract_names(item.get("about")))
-            tags.extend(self.split_keywords(item.get("keywords")))
-            entities.extend(self.extract_names(item.get("mentions")))
-
-        return (
-            self.unique_list(topics),
-            self.unique_list(tags),
-            self.unique_list(entities),
-        )
-
-    def extract_source_type(self, *items: dict[str, Any]) -> str | None:
-        for item in items:
-            if not isinstance(item, dict):
-                continue
-            item_type = item.get("@type")
-            if isinstance(item_type, list):
-                joined = self.first_text(",".join(str(value) for value in item_type))
-                if joined:
-                    return joined
-            cleaned = self.clean_text(item_type)
-            if cleaned:
-                return cleaned
-        return None
-
-    def extract_language(self, response, *items: dict[str, Any]) -> str | None:
-        for item in items:
-            if not isinstance(item, dict):
-                continue
-            value = self.clean_text(item.get("inLanguage"))
-            if value:
-                return value
-        return self.meta_first(response, "html::attr(lang)")
-
-    def extract_canonical_url(self, response, *items: dict[str, Any]) -> str:
-        candidate = None
-        for item in items:
-            if not isinstance(item, dict):
-                continue
-            main_entity = item.get("mainEntityOfPage")
-            main_entity_url = None
-            if isinstance(main_entity, dict):
-                main_entity_url = self.first_text(main_entity.get("@id"), main_entity.get("url"))
-            else:
-                main_entity_url = self.clean_text(main_entity)
-            candidate = self.first_text(item.get("url"), main_entity_url)
-            if candidate:
-                break
-
-        if not candidate:
-            candidate = self.meta_first(
-                response,
-                "link[rel='canonical']::attr(href)",
-                "meta[property='og:url']::attr(content)",
-            )
-
-        if candidate:
-            candidate = urljoin(response.url, candidate)
-
-        return self.canonicalize(candidate or response.url)
+    # -- ClaimReview (delegate to helpers.claimreview) --
 
     def extract_verdict_and_rating(
         self, claim_review: dict[str, Any]
     ) -> tuple[str | None, str | None]:
-        review_rating = claim_review.get("reviewRating")
-        if not isinstance(review_rating, dict):
-            return (None, None)
+        return _cr.extract_verdict_and_rating(claim_review)
 
-        verdict = self.first_text(
-            self._normalize_verdict_label(review_rating.get("alternateName")),
-            self._normalize_verdict_label(review_rating.get("name")),
-        )
-        rating = self.first_text(
-            review_rating.get("ratingValue"),
-            review_rating.get("bestRating"),
-            review_rating.get("worstRating"),
-        )
-        return (verdict, rating)
+    def extract_canonical_url(self, response, *items: dict[str, Any]) -> str:
+        return _cr.extract_canonical_url(response, *items, canonicalize_fn=self.canonicalize)
 
-    def _normalize_verdict_label(self, value: Any) -> str | None:
-        cleaned = self.clean_text(value)
-        if not cleaned:
-            return None
-        if re.fullmatch(r"\d+(?:[.,]\d+)?", cleaned):
-            return None
-        return cleaned
+    def extract_author(self, response, *items: dict[str, Any]) -> str | None:
+        return _cr.extract_author(response, *items)
 
-    def extract_label_prefix_before_colon(self, value: Any) -> str | None:
-        cleaned = self.clean_text(value)
-        if not cleaned or ":" not in cleaned:
-            return None
-        prefix = cleaned.split(":", 1)[0]
-        return self.clean_text(prefix)
-
-    def extract_text_after_colon(self, value: Any) -> str | None:
-        cleaned = self.clean_text(value)
-        if not cleaned or ":" not in cleaned:
-            return None
-        suffix = cleaned.split(":", 1)[1]
-        return self.clean_text(suffix)
+    def extract_body(self, response, *items: dict[str, Any]) -> str | None:
+        return _cr.extract_body(response, *items)
 
     def infer_verdict(self, *values: Any) -> str | None:
-        patterns = (
-            (r"\bverdade,?\s*mas\b", "Verdade, mas"),
-            (r"\bimprecis[oa]\b", "Impreciso"),
-            (r"\berrado\b", "Errado"),
-            (r"\bverdadeir[oa]\b|\bé verdade\b|\btem raz[aã]o\b", "Verdadeiro"),
-            (r"\bfals[oa]\b|\bn[aã]o [ée] verdade\b|\bboato\b|\bfake\b|\bhoax\b", "Falso"),
-        )
-        for value in values:
-            cleaned = self.clean_text(value)
-            if not cleaned:
-                continue
-            lowered = cleaned.lower()
-            for pattern, verdict in patterns:
-                if re.search(pattern, lowered):
-                    return verdict
-        return None
+        return _cr.infer_verdict(*values)
+
+    # -- Taxonomy (delegate to helpers.taxonomy) --
+
+    def extract_taxonomy(self, *items: dict[str, Any]) -> tuple[list[str], list[str], list[str]]:
+        return _tx.extract_taxonomy(*items)
+
+    def extract_source_type(self, *items: dict[str, Any]) -> str | None:
+        return _tx.extract_source_type(*items)
+
+    def extract_language(self, response, *items: dict[str, Any]) -> str | None:
+        return _tx.extract_language(response, *items)
+
+    # -- Item builder --
 
     def build_item(
         self,
@@ -341,6 +158,8 @@ class BaseFactCheckSpider(scrapy.Spider):
         summary: Optional[str] = None,
         verdict: Optional[str] = None,
         rating: Optional[str] = None,
+        author: Optional[str] = None,
+        body: Optional[str] = None,
         language: Optional[str] = None,
         country: Optional[str] = None,
         topics: Optional[list[str]] = None,
@@ -364,6 +183,8 @@ class BaseFactCheckSpider(scrapy.Spider):
             "summary": summary,
             "verdict": verdict,
             "rating": rating,
+            "author": author,
+            "body": body,
             "language": language,
             "country": country,
             "topics": topics or [],

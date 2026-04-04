@@ -96,6 +96,7 @@ class FactCheckPipeline:
         finished_at = utc_now_iso()
         agency_id = getattr(spider, "agency_id", spider.name)
         agency_name = getattr(spider, "agency_name", spider.name)
+        self.writer.close()
         self.writer.update_run(
             spider_name=spider.name,
             agency_id=agency_id,
