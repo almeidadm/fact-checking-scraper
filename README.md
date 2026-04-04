@@ -1,62 +1,46 @@
-# FactCheck Scrape
+# fact-checking-scrape
 
-Pipeline de web scraping para agencias e editorias de fact-checking, com coleta padronizada em JSONL, deduplicacao por URL canonica, logs estruturados e uma trilha de analise processada para notebooks e export consolidado.
+Pipeline de web scraping para 13 agencias de fact-checking em portugues, com coleta padronizada em JSONL, deduplicacao SQLite, validacao JSON Schema, limpeza de texto pre-storage e execucao paralela.
 
-## O que o projeto faz
+## Agencias suportadas
 
-- executa spiders Scrapy por agencia;
-- valida o schema bruto antes de persistir os itens;
-- evita duplicatas com estado historico por agencia e deduplicacao dentro do run atual;
-- grava artefatos rastreaveis por execucao em `data/runs/<run_id>/`;
-- permite agendamento via APScheduler;
-- oferece fallback opt-in com Scrapling para paginas que aparentam bloqueio anti-bot;
-- prepara datasets processados com limpeza, normalizacao, NLP e `manifest.json`.
+| Spider | Agencia | Pais | Descoberta |
+|---|---|---|---|
+| `afp_checamos` | AFP Checamos | BR | AJAX Drupal |
+| `agencia_lupa` | Agencia Lupa | BR | HTML + paginacao |
+| `aos_fatos` | Aos Fatos | BR | HTML + paginacao |
+| `boatos_org` | Boatos.org | BR | Sitemaps anuais |
+| `e_farsas` | E-farsas | BR | HTML + paginacao |
+| `estadao_verifica` | Estadao Verifica | BR | Sitemap Arc |
+| `g1_fato_ou_fake` | G1 Fato ou Fake | BR | Sitemap Globo |
+| `observador` | Observador | PT | HTML + API JSON |
+| `poligrafo` | Poligrafo | PT | HTML Elementor |
+| `projeto_comprova` | Projeto Comprova | BR | HTML + paginacao |
+| `publico` | Publico | PT | Sitemap completo |
+| `reuters_fact_check` | Reuters Fact Check | Intl | HTML + API interna |
+| `uol_confere` | UOL Confere | BR | HTML + Service + Sitemap fallback |
+
+Detalhes tecnicos de cada spider em [`docs/spiders.md`](docs/spiders.md).
 
 ## Arquitetura
 
-```mermaid
-graph TD
-    CLI[CLI factcheck-scrape] --> Runner[Runner]
-    Scheduler[APScheduler] --> CLI
-    Runner --> Scrapy[Scrapy spiders]
-    Scrapy --> Middleware[ScraplingFallbackMiddleware]
-    Scrapy --> Pipeline[FactCheckPipeline]
-    Pipeline --> Schema[Schema validation]
-    Pipeline --> Dedupe[DedupeStore]
-    Pipeline --> Writer[RunWriter]
-    Writer --> Raw[(data/runs/<run_id>/items.jsonl)]
-    Writer --> Run[(data/runs/<run_id>/run.json)]
-    Dedupe --> State[(data/state/seen_<agency>.jsonl)]
-    Raw --> Analysis[analysis package]
-    Run --> Analysis
-    Analysis --> Processed[(data/processed/<snapshot_id>/...)]
-    Scrapy --> Logs[(logs/<run_id>.log)]
+```
+Spider -> TextCleanupPipeline -> FactCheckPipeline -> Storage
+               (200)                  (300)
+                                    |       |
+                                 Dedupe   RunWriter
+                                (SQLite)  (JSONL)
 ```
 
-## Fontes suportadas
+- **TextCleanupPipeline**: html.unescape, mojibake repair, NFKC, whitespace
+- **FactCheckPipeline**: validacao JSON Schema, deduplicacao, storage
+- **DedupeStore**: SQLite com WAL mode, migracao automatica de JSONL legado
+- **RunWriter**: file handle persistente, `ensure_ascii=False`
+- **Runner**: ate 4 spiders em paralelo via `ProcessPoolExecutor`
 
-- `afp_checamos`
-- `agencia_lupa`
-- `aos_fatos`
-- `boatos_org`
-- `e_farsas`
-- `estadao_verifica`
-- `g1_fato_ou_fake`
-- `observador`
-- `poligrafo`
-- `projeto_comprova`
-- `publico`
-- `reuters_fact_check`
-- `uol_confere`
-
-## Requisitos
-
-- Python 3.12
-- `uv`
+Diagrama completo em [`docs/design.md`](docs/design.md).
 
 ## Instalacao
-
-Ambiente base:
 
 ```bash
 uv venv
@@ -66,129 +50,88 @@ uv pip install -e ".[dev]"
 
 Extras opcionais:
 
-- analise e notebooks:
-
 ```bash
+# Analise e NLP
 uv pip install -e ".[analysis]"
-uv run python -m spacy download pt_core_news_lg
-```
+python -m spacy download pt_core_news_lg
 
-- fallback anti-bot com Scrapling:
-
-```bash
+# Scrapling (anti-bot para observador e reuters)
 uv pip install -e ".[scrapling]"
 scrapling install --force
 ```
 
-## Uso rapido
-
-Listar spiders:
+## Uso
 
 ```bash
+# Listar spiders
 factcheck-scrape list
-```
 
-Executar uma spider:
+# Executar uma spider
+factcheck-scrape run --spider afp_checamos
 
-```bash
-factcheck-scrape run --spider reuters_fact_check
-```
-
-Executar todas as spiders:
-
-```bash
+# Executar todas (4 em paralelo)
 factcheck-scrape run --spider all
-```
 
-Recoletar uma agencia ignorando o estado historico de deduplicacao:
-
-```bash
+# Recoletar ignorando deduplicacao historica
 factcheck-scrape run --spider observador --ignore-existing-seen-state
-```
 
-Agendar jobs com o arquivo padrao:
-
-```bash
+# Agendar execucoes
 factcheck-scrape schedule --config configs/schedule.yaml
+
+# Relatorio da ultima execucao
+factcheck-scrape report [--count 5] [--json]
+
+# Metricas de qualidade por spider
+factcheck-scrape quality [--run-id <id>] [--json]
 ```
 
-Abrir notebooks:
+## Saida de dados
+
+```
+data/
+  runs/<run_id>/
+    items.jsonl          # Itens coletados
+    run.json             # Metadados da execucao
+  state/
+    seen_<agency>.db     # Deduplicacao SQLite
+logs/
+  <run_id>.log           # Logs estruturados (structlog)
+```
+
+## Schema
+
+O schema e derivado da dataclass `FactCheckItem` em `src/factcheck_scrape/schema.py` (fonte unica de verdade). A validacao usa `jsonschema.Draft202012Validator`.
+
+**Campos obrigatorios**: `item_id`, `agency_id`, `agency_name`, `spider`, `source_url`, `canonical_url`, `title`, `published_at`, `collected_at`, `run_id`
+
+**Campos opcionais**: `claim`, `summary`, `verdict`, `rating`, `author`, `body`, `language`, `country`, `topics`, `tags`, `entities`, `source_type`
+
+Schema JSON gerado em [`docs/schema.json`](docs/schema.json).
+
+## Testes
 
 ```bash
-uv run jupyter lab
+# Unitarios + integracao (165 testes)
+python -m pytest tests/
+
+# Smoke tests contra sites reais
+python -m pytest tests/ --run-smoke
+
+# Lint
+ruff check src/ tests/
 ```
 
-## Saidas do projeto
+## Contribuindo
 
-Coleta bruta por run:
+Consulte [`CONTRIBUTING.md`](CONTRIBUTING.md) para o guia de adicao de novas spiders.
 
-- `data/runs/<run_id>/items.jsonl`
-- `data/runs/<run_id>/run.json`
+## Documentacao
 
-Estado de deduplicacao:
+- [`docs/design.md`](docs/design.md) — arquitetura, diagrama Mermaid e decisoes do pipeline
+- [`docs/spiders.md`](docs/spiders.md) — contrato tecnico de cada spider
+- [`docs/analysis.md`](docs/analysis.md) — regras do modulo de analise/NLP
+- [`docs/schema.json`](docs/schema.json) — JSON Schema do item
 
-- `data/state/seen_<agency_id>.jsonl`
+## Licenca
 
-Snapshots processados:
-
-- `data/processed/<snapshot_id>/spiders/<spider>.jsonl`
-- `data/processed/<snapshot_id>/factcheck_scrape_unified.jsonl`
-- `data/processed/<snapshot_id>/manifest.json`
-
-Logs:
-
-- `logs/<run_id>.log`
-
-## Contrato e qualidade
-
-O schema bruto padronizado fica em `docs/schema.json`. O pipeline exige campos obrigatorios como `item_id`, `agency_id`, `source_url`, `canonical_url`, `title`, `published_at`, `collected_at` e `run_id`.
-
-Antes de persistir, a coleta aplica guardrails de qualidade:
-
-- descarta itens com `title` vazio ou que repete a propria URL;
-- descarta `published_at` vazio ou placeholders como `-` e variantes Unicode de traco;
-- separa `verdict` humano de `rating` numerico quando a origem fornece `ClaimReview`;
-- usa um backstop no pipeline para impedir persistencia degradada mesmo que uma spider futura relaxe a extracao.
-
-## Estrutura do repositorio
-
-- `src/factcheck_scrape/`: CLI, runner, pipeline, schema, storage, logging e spiders
-- `src/factcheck_scrape/spiders/`: spiders por agencia
-- `src/factcheck_scrape/analysis/`: selecao de runs, limpeza, normalizacao, NLP e export
-- `configs/`: configuracoes de agendamento
-- `docs/`: documentacao tecnica, guia de uso e schema
-- `notebooks/`: notebooks de EDA e consolidacao do dataset processado
-- `tests/`: testes unitarios e fixtures
-- `data/`: runs brutos, estado de dedupe e snapshots processados
-- `logs/`: logs estruturados por execucao
-
-## Desenvolvimento
-
-Rodar testes:
-
-```bash
-uv run pytest
-```
-
-Rodar lint:
-
-```bash
-uv run ruff check .
-```
-
-Formatar:
-
-```bash
-uv run ruff format .
-```
-
-## Documentacao relacionada
-
-- `docs/user_guide.md`: instalacao, CLI, restricoes editoriais e fluxo operacional
-- `docs/design.md`: arquitetura, diagrama Mermaid e decisoes do pipeline
-- `docs/analysis.md`: regras do dataset processado e fluxo `raw -> processed`
-- `docs/schema.json`: contrato do item bruto
-
-## Versionamento
-
-O projeto adota tags Git como fonte de verdade para releases, no formato `vMAJOR.MINOR.PATCH`. Mudancas relevantes devem atualizar a documentacao impactada e registrar seu efeito em `CHANGELOG.md`.
+MIT
